@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚚 Delivery Dashboard - FoodExpress</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-orange-50 to-orange-100 min-h-screen">
+    <div id="app" class="p-6">
+        <div class="max-w-6xl mx-auto">
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-20">
+                <div class="inline-block w-16 h-16 border-4 border-orange-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p class="text-xl font-semibold text-gray-700">Loading orders...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error" class="hidden bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto text-center">
+                <svg class="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">Connection Error</h2>
+                <p id="error-message" class="text-gray-600 mb-4 whitespace-pre-line"></p>
+                <button onclick="fetchOrders()" class="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors">
+                    Retry Connection
+                </button>
+            </div>
+
+            <!-- Main Dashboard -->
+            <div id="dashboard" class="hidden">
+                <!-- Header -->
+                <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">🚚 Delivery Dashboard</h1>
+                            <p class="text-gray-600 mt-1">FoodExpress - Live Orders</p>
+                        </div>
+                        <div class="text-right">
+                            <div id="current-time" class="text-2xl font-bold text-orange-600"></div>
+                            <div class="text-sm text-gray-500 flex items-center gap-1 justify-end mt-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Last refresh: <span id="last-refresh"></span>
+                            </div>
+                            <button onclick="fetchOrders()" class="mt-2 text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                                <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Refresh Now
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats -->
+                    <div class="grid grid-cols-3 gap-4 mt-6">
+                        <div class="bg-orange-50 p-4 rounded-lg">
+                            <div class="text-orange-600 font-semibold">Active Deliveries</div>
+                            <div id="active-count" class="text-2xl font-bold text-gray-800">0</div>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <div class="text-green-600 font-semibold">Delivered Today</div>
+                            <div id="delivered-count" class="text-2xl font-bold text-gray-800">0</div>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="text-blue-600 font-semibold">Total Orders</div>
+                            <div id="total-count" class="text-2xl font-bold text-gray-800">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Orders Section -->
+                <div id="active-orders-section" class="hidden mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                        🔥 Active Deliveries (<span id="active-orders-count">0</span>)
+                    </h2>
+                    <div id="active-orders-list" class="grid gap-4"></div>
+                </div>
+
+                <!-- Delivered Orders Section -->
+                <div id="delivered-orders-section" class="hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                        ✅ Delivered Today (<span id="delivered-orders-count">0</span>)
+                    </h2>
+                    <div id="delivered-orders-list" class="grid gap-4"></div>
+                </div>
+
+                <!-- No Orders State -->
+                <div id="no-orders" class="hidden bg-white rounded-lg shadow-md p-12 text-center">
+                    <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    <h3 class="text-xl font-semibold text-gray-600">No orders available</h3>
+                    <p class="text-gray-500 mt-2">New orders will appear here automatically</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Try multiple possible server URLs
+        const POSSIBLE_URLS = [
+            'http://localhost:3000',
+            
+        ];
+        let API_URL = POSSIBLE_URLS[0];
+        let orders = [];
+
+        // Update current time every second
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeEl = document.getElementById('current-time');
+            if (timeEl) {
+                timeEl.textContent = now.toLocaleTimeString();
+            }
+        }
+        setInterval(updateCurrentTime, 1000);
+
+        // Calculate elapsed time in minutes - UPDATES EVERY SECOND
+        function calculateElapsedTime(orderDate) {
+            const now = new Date();
+            const orderTime = new Date(orderDate);
+            const diffMs = now - orderTime;
+            const diffMins = Math.floor(diffMs / 60000);
+            return Math.max(0, diffMins);
+        }
+
+        // Get estimated delivery time (order time + 30 minutes)
+        function getEstimatedDeliveryTime(orderDate) {
+            const orderTime = new Date(orderDate);
+            const deliveryTime = new Date(orderTime.getTime() + 30 * 60000);
+            return deliveryTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Get time remaining (30 - elapsed) - UPDATES EVERY SECOND
+        function getTimeRemaining(orderDate) {
+            const elapsed = calculateElapsedTime(orderDate);
+            const remaining = 30 - elapsed;
+            return Math.max(0, remaining);
+        }
+
+        // Get status color class
+        function getStatusColor(orderDate, status) {
+            if (status === 'delivered') return 'text-green-600 bg-green-50';
+            
+            const elapsed = calculateElapsedTime(orderDate);
+            if (elapsed > 30) return 'text-red-600 bg-red-50';
+            if (elapsed > 20) return 'text-orange-600 bg-orange-50';
+            return 'text-green-600 bg-green-50';
+        }
+
+        // Get status badge
+        function getStatusBadge(status) {
+            const statusMap = {
+                'pending': { label: 'Pending', class: 'bg-orange-100 text-orange-700' },
+                'preparing': { label: 'Preparing', class: 'bg-blue-100 text-blue-700' },
+                'on the way': { label: 'On the Way', class: 'bg-purple-100 text-purple-700' },
+                'delivered': { label: '✓ Delivered', class: 'bg-green-100 text-green-700' },
+                'cancelled': { label: 'Cancelled', class: 'bg-red-100 text-red-700' }
+            };
+            return statusMap[status.toLowerCase()] || statusMap['pending'];
+        }
+
+        // Mark order as delivered
+        async function markAsDelivered(orderId) {
+            try {
+                const response = await fetch(API_URL + '/api/orders/' + orderId + '/status', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'Delivered' })
+                });
+
+                if (!response.ok) throw new Error('Failed to update order status');
+
+                console.log('Order marked as delivered:', orderId);
+                await fetchOrders();
+            } catch (error) {
+                console.error('Error updating order:', error);
+                alert('Failed to update order status. Please try again.');
+            }
+        }
+
+        // Render active order card
+        function renderActiveOrder(order) {
+            const timeRemaining = getTimeRemaining(order.orderDate);
+            const timeElapsed = calculateElapsedTime(order.orderDate);
+            const isUrgent = timeRemaining <= 10;
+            const statusInfo = getStatusBadge(order.status);
+            const orderIdSafe = order.id.replace(/'/g, "\\'");
+
+            return `
+                <div class="bg-white rounded-lg shadow-md p-6 transition-all ${isUrgent ? 'border-2 border-red-500 animate-pulse' : ''}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-3 flex-wrap">
+                                <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                                </svg>
+                                <h2 class="text-2xl font-bold text-gray-800">${order.restaurant}</h2>
+                                <span class="px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.class}">
+                                    ${statusInfo.label}
+                                </span>
+                                ${isUrgent ? '<span class="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 animate-pulse">🔥 URGENT</span>' : ''}
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div class="flex items-start gap-2 text-gray-600">
+                                    <svg class="w-5 h-5 text-orange-500 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                    <div>
+                                        <span class="font-medium">Delivery Address:</span>
+                                        <div class="text-sm">${order.location}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center gap-2 text-gray-600">
+                                    <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span class="font-medium">Order Time:</span>
+                                    <span>${order.orderTime}</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 p-3 rounded-lg mb-4">
+                                <div class="text-sm text-gray-600 mb-1">📱 Customer Phone:</div>
+                                <div class="font-semibold text-gray-800 text-lg">${order.phone}</div>
+                                
+                                <div class="text-sm text-gray-600 mb-1 mt-3">🍽️ Order Items:</div>
+                                <div class="font-semibold text-gray-800">${order.items}</div>
+                                <div class="text-xl font-bold text-orange-600 mt-2">${order.totalAmount}</div>
+                            </div>
+
+                            <div class="flex gap-4 items-center flex-wrap">
+                                <div class="px-4 py-2 rounded-lg ${getStatusColor(order.orderDate, order.status)}">
+                                    <div class="text-xs font-semibold mb-1">Time Elapsed</div>
+                                    <div class="text-lg font-bold">${timeElapsed} min</div>
+                                </div>
+                                
+                                <div class="px-4 py-2 rounded-lg bg-blue-50 text-blue-600">
+                                    <div class="text-xs font-semibold mb-1">Est. Delivery</div>
+                                    <div class="text-lg font-bold">${getEstimatedDeliveryTime(order.orderDate)}</div>
+                                </div>
+
+                                <div class="px-4 py-2 rounded-lg ${
+                                    timeRemaining <= 5 ? 'bg-red-50 text-red-600' :
+                                    timeRemaining <= 10 ? 'bg-orange-50 text-orange-600' :
+                                    'bg-purple-50 text-purple-600'
+                                }">
+                                    <div class="text-xs font-semibold mb-1">Time Remaining</div>
+                                    <div class="text-lg font-bold flex items-center gap-1">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        ${timeRemaining} min
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ml-6">
+                            <button onclick="markAsDelivered('${orderIdSafe}')" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors shadow-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Mark Delivered
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render delivered order card
+        function renderDeliveredOrder(order) {
+            return `
+                <div class="bg-white rounded-lg shadow-md p-6 opacity-70">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-3">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <h2 class="text-xl font-bold text-gray-800">${order.restaurant}</h2>
+                                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-700">
+                                    ✓ Delivered
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-4 text-sm text-gray-600">
+                                <div><span class="font-medium">Location:</span> ${order.location}</div>
+                                <div><span class="font-medium">Time:</span> ${order.orderTime}</div>
+                                <div><span class="font-medium">Amount:</span> ${order.totalAmount}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fetch orders from API
+        async function fetchOrders() {
+            const refreshIcon = document.getElementById('refresh-icon');
+            if (refreshIcon) {
+                refreshIcon.classList.add('animate-spin');
+            }
+
+            // Try each URL until one works
+            for (let url of POSSIBLE_URLS) {
+                try {
+                    console.log('Trying to connect to:', url);
+                    const response = await fetch(url + '/api/orders');
+                    
+                    if (!response.ok) {
+                        console.error('Failed with ' + url + ':', response.status);
+                        continue;
+                    }
+                    
+                    API_URL = url;
+                    console.log('Successfully connected to:', url);
+                    
+                    const data = await response.json();
+                    console.log('Orders received:', data.length);
+                    
+                    // Transform orders - SUBTRACT 2 HOURS to convert back to local time
+                    orders = data.map(order => {
+                        // Server stores time with +2 hours, so we subtract 2 hours to get real local time
+                        const serverTime = new Date(order.createdAt);
+                        const localTime = new Date(serverTime.getTime() - (2 * 60 * 60 * 1000));
+                        
+                        return {
+                            id: order._id,
+                            restaurant: order.restaurantId?.name || 'Unknown Restaurant',
+                            location: order.deliveryAddress,
+                            phone: order.phone,
+                            orderTime: localTime.toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: true
+                            }),
+                            items: order.items.map(item => item.quantity + 'x ' + item.name).join(', '),
+                            totalAmount: '$' + order.totalAmount.toFixed(2),
+                            status: order.status.toLowerCase(),
+                            orderDate: localTime.toISOString() // Use corrected local time
+                        };
+                    });
+
+                    orders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+                    
+                    renderDashboard();
+                    
+                    const lastRefreshEl = document.getElementById('last-refresh');
+                    if (lastRefreshEl) {
+                        lastRefreshEl.textContent = new Date().toLocaleTimeString();
+                    }
+                    
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('error').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    
+                    if (refreshIcon) {
+                        refreshIcon.classList.remove('animate-spin');
+                    }
+                    return;
+
+                } catch (error) {
+                    console.error('Error with ' + url + ':', error);
+                }
+            }
+
+            console.error('All connection attempts failed');
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            
+            const errorMsg = document.getElementById('error-message');
+            if (errorMsg) {
+                errorMsg.textContent = 'Cannot connect to server. Please check:\n1. Is your server running? (node server1.js)\n2. Check the browser console (F12) for errors\n3. Tried URLs: ' + POSSIBLE_URLS.join(', ');
+            }
+            
+            if (refreshIcon) {
+                refreshIcon.classList.remove('animate-spin');
+            }
+        }
+
+        // Render dashboard
+        function renderDashboard() {
+            const activeOrders = orders.filter(o => 
+                o.status === 'pending' || o.status === 'preparing' || o.status === 'on the way'
+            );
+
+            const deliveredToday = orders.filter(o => {
+                const orderDate = new Date(o.orderDate);
+                const today = new Date();
+                return o.status === 'delivered' && orderDate.toDateString() === today.toDateString();
+            });
+
+            // Update stats
+            const activeCountEl = document.getElementById('active-count');
+            const deliveredCountEl = document.getElementById('delivered-count');
+            const totalCountEl = document.getElementById('total-count');
+            
+            if (activeCountEl) activeCountEl.textContent = activeOrders.length;
+            if (deliveredCountEl) deliveredCountEl.textContent = deliveredToday.length;
+            if (totalCountEl) totalCountEl.textContent = orders.length;
+
+            // Render active orders
+            const activeSection = document.getElementById('active-orders-section');
+            const activeList = document.getElementById('active-orders-list');
+            const activeCount = document.getElementById('active-orders-count');
+            
+            if (activeOrders.length > 0) {
+                if (activeSection) activeSection.classList.remove('hidden');
+                if (activeCount) activeCount.textContent = activeOrders.length;
+                if (activeList) activeList.innerHTML = activeOrders.map(renderActiveOrder).join('');
+            } else {
+                if (activeSection) activeSection.classList.add('hidden');
+            }
+
+            // Render delivered orders
+            const deliveredSection = document.getElementById('delivered-orders-section');
+            const deliveredList = document.getElementById('delivered-orders-list');
+            const deliveredCount = document.getElementById('delivered-orders-count');
+            
+            if (deliveredToday.length > 0) {
+                if (deliveredSection) deliveredSection.classList.remove('hidden');
+                if (deliveredCount) deliveredCount.textContent = deliveredToday.length;
+                if (deliveredList) deliveredList.innerHTML = deliveredToday.map(renderDeliveredOrder).join('');
+            } else {
+                if (deliveredSection) deliveredSection.classList.add('hidden');
+            }
+
+            // Show no orders message
+            const noOrders = document.getElementById('no-orders');
+            if (orders.length === 0) {
+                if (noOrders) noOrders.classList.remove('hidden');
+            } else {
+                if (noOrders) noOrders.classList.add('hidden');
+            }
+        }
+
+        // Initialize
+        updateCurrentTime();
+        fetchOrders();
+
+        // Update dashboard every 1 second to refresh time elapsed/remaining
+        setInterval(() => {
+            if (orders.length > 0) {
+                renderDashboard();
+            }
+        }, 1000);
+
+        // Fetch new orders from server every 1 minute
+        setInterval(() => {
+            fetchOrders();
+            console.log('Dashboard refreshed at:', new Date().toLocaleTimeString());
+        }, 30000);
+    </script>
+</body>
+</html>
